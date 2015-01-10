@@ -1,0 +1,169 @@
+---
+title: "Reproducible Research: Peer Assessment 1"
+output: 
+  html_document:
+    keep_md: true
+---
+
+
+## Loading and preprocessing the data
+Just read the data from the given CSV file.  For this analysis, the file used is at https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2Factivity.zip.  In an attempt to make this code less machine dependent, it just prompts to browse to the file to get started.
+
+```{r}
+library("ggplot2")
+set.seed(75961)#Nacogdoches, TX!!!
+actData <- read.csv(file.choose(), na.strings = c("NA", ""))
+```
+
+First just get some basic infomation from the data.  The plot command below may take several seconds to run.
+
+
+```{r}
+head(actData)
+summary(actData)
+str(actData)
+
+plot(actData)
+```
+
+There is some relationship between steps and date shown in the plot.
+
+To process the data, I create a new data frame with 2 variables - the date and the sum of the steps taken on that date.
+
+```{r}
+#first convert the date column to an actual date format
+actData$date<-as.Date(actData$date)
+
+sumOfSteps <- with(actData, tapply(steps,date,sum,na.rm=TRUE))
+myDataFrame <- data.frame(day=unique(actData$date), sumOfSteps = sumOfSteps)
+```
+
+## What is mean total number of steps taken per day?
+
+The mean total steps taken per day is:
+```{r}
+mean(sumOfSteps)
+```
+
+The median is:
+```{r}
+median(sumOfSteps)
+```
+
+And here is a histogram of this activity.
+
+```{r, ECHO=FALSE}
+histPlot<- qplot(sumOfSteps, data=myDataFrame, geom="histogram",stat='bin',xlab="Number of steps", ylab="Days")
+histplot<- histPlot + scale_y_discrete(labels=c(0:10)) #set the y axis better
+histplot
+```
+
+## What is the average daily activity pattern?
+First examine a time series plot.  Use the same logic as above to create a new data frame with average steps per time interval to use for plotting, then create the plot.
+
+```{r}
+steps <- with(actData, tapply(steps, as.character(interval), sum, na.rm=TRUE))
+myDataFrameInterval <- data.frame(interval=unique(as.character(actData$interval)))
+myDataFrameInterval$stepsPerInterval <-  steps
+#need average steps of time interval per day
+myDataFrameInterval$avgSteps <- steps/length(myDataFrame$day)
+
+#make a time series plot
+plot(x=myDataFrameInterval$interval, y=myDataFrameInterval$avgSteps, 
+     type='l', xlab='5 minute interval', ylab="Average number of steps")
+```
+
+The 5 minute interval which has the most average steps is index 272, which corresponds to time 22:35.
+```{r}
+a<-which.max(myDataFrameInterval$avgSteps)
+#convert from base60 (time) to time
+hour <- a[[1]]/12   #12 5 minute intervals per hour
+mins <- (hour-as.integer(hour))*60 # so hours is now 24 hour clock hours, minutes is minutes
+mins <- mins - 5 #because time started at zero at the beginning
+print(toString(c("The most steps were taken at",as.integer(hour),":",as.integer(mins))))
+
+```
+
+## Imputing missing values
+
+Now get an idea of how many NA (missing) values there are in the activity data.
+
+```{r}
+naCount <- sum(is.na(actData))
+print (naCount)
+```
+There are 2304 NA values.  Next, I chose to replace the NA values with the average number of steps for that particular 5 minute interval in a new data frame.
+Also, a quick check to ensure the previous mean and median did not change.
+
+```{r}
+myFinalDataFrame<-actData
+myFinalDataFrame[which(is.na(myFinalDataFrame$steps)),1] <- myDataFrameInterval$avgSteps
+sumOfSteps2 <- with(myFinalDataFrame, tapply(steps,date,sum,na.rm=TRUE))
+mean(sumOfSteps2)
+median(sumOfSteps2)
+```
+
+The asssignment calls for a histogram of this modified data as well:
+
+```{r echo=FALSE}
+histPlot2<- qplot(sumOfSteps2, data=data.frame(day=unique(myFinalDataFrame$date), 
+                                              sumOfSteps = sumOfSteps2), geom="histogram",stat='bin',xlab="Number of steps", ylab="Days")
+histplot2<- histPlot + scale_y_discrete(labels=c(0:10)) #set the y axis better
+histplot2
+```
+
+## Are there differences in activity patterns between weekdays and weekends?
+
+To answer this question, I need a function to separate weekdays from weekends based on the date.  Also, update the data frame with this classification.
+
+```{r}
+day <- function(date){
+    if (weekdays(date) %in% c("Saturday", "Sunday")) {
+        "weekend"
+    } else {
+        "weekday"
+    }
+}
+#created a weekend column in data frame
+myFinalDataFrame$date<- as.Date(myFinalDataFrame$date)
+myFinalDataFrame$weekend <- sapply(myFinalDataFrame$date,day)
+
+```
+
+Create the data for the 2 needed comparison graphs.  This is needed to generate the final dual part graph to fit the example from the class repository.
+
+```{r}
+a2<-aggregate( steps ~ interval + weekend ,data=myFinalDataFrame, FUN=mean)
+
+ggplot(a2,aes(interval,steps, color='blue'))+
+    geom_line()+
+    facet_grid(weekend~.) +
+    xlab('Interval') +
+    ylab('Number of steps')
+#oddly, this draws as red on my machine.  Sigh.
+```
+
+a2 is just a temporary variable to hold the data for graphing.  It is only to keep the code from being too messy to read.  Anyway, there is a difference.  It looks like the volume of steps taken each day starts later in the morning on weekends (about 6AM on weekdays and 8AM on weekends).  People also tend to be more active during the day during weekends compared to weekdays.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
